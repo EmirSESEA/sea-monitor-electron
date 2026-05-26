@@ -3,7 +3,7 @@ process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Bypass self-signed SSL errors
 const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
-const xlsx = require('xlsx');
+
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
@@ -89,13 +89,13 @@ function isValidUrlString(str) {
   // Exclude static files and common header keywords
   const lower = trimmed.toLowerCase();
   if (
-    lower.endsWith('.png') || 
-    lower.endsWith('.jpg') || 
-    lower.endsWith('.jpeg') || 
-    lower.endsWith('.gif') || 
-    lower.endsWith('.pdf') || 
-    lower.endsWith('.css') || 
-    lower.endsWith('.js') || 
+    lower.endsWith('.png') ||
+    lower.endsWith('.jpg') ||
+    lower.endsWith('.jpeg') ||
+    lower.endsWith('.gif') ||
+    lower.endsWith('.pdf') ||
+    lower.endsWith('.css') ||
+    lower.endsWith('.js') ||
     lower.endsWith('.zip')
   ) {
     return false;
@@ -119,7 +119,7 @@ function parseExcelForUrls(filePath) {
   const workbook = xlsx.readFile(filePath);
   const sheetName = workbook.SheetNames[0];
   const worksheet = workbook.Sheets[sheetName];
-  
+
   // Read worksheet as a 2D array
   const data = xlsx.utils.sheet_to_json(worksheet, { header: 1, defval: '' });
   const urls = [];
@@ -138,7 +138,7 @@ function parseExcelForUrls(filePath) {
 
         // Try to find a name for this site in the same row
         let name = '';
-        
+
         // Strategy 1: Look for other cells in the same row that are strings, not URLs, and not empty
         for (let i = 0; i < row.length; i++) {
           if (i !== colIndex) {
@@ -208,7 +208,7 @@ ipcMain.handle('parse-excel-file', async (event, filePath) => {
 ipcMain.handle('check-status', async (event, url) => {
   const controller = new AbortController();
   // 12-second timeout to give slower pages a chance but not hang forever
-  const timeoutId = setTimeout(() => controller.abort(), 12000); 
+  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   const startTime = Date.now();
   try {
@@ -221,13 +221,13 @@ ipcMain.handle('check-status', async (event, url) => {
         'Pragma': 'no-cache'
       }
     });
-    
+
     const duration = Date.now() - startTime;
     clearTimeout(timeoutId);
-    
+
     // Status is active if HTTP status code is in 2xx or 3xx range
     const isActive = response.status >= 200 && response.status < 400;
-    
+
     return {
       status: isActive ? 'active' : 'inactive',
       statusCode: response.status,
@@ -239,7 +239,7 @@ ipcMain.handle('check-status', async (event, url) => {
     clearTimeout(timeoutId);
     const duration = Date.now() - startTime;
     let errorMessage = error.message;
-    
+
     if (error.name === 'AbortError') {
       errorMessage = 'Tiempo de espera agotado (12s)';
     } else if (error.code === 'ENOTFOUND') {
