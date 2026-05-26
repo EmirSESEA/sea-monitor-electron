@@ -113,8 +113,9 @@
     "axios": "^1.7.2",
     "better-sqlite3": "^11.1.2",
     "electron-log": "^5.2.0",
+    "electron-updater": "^6.3.9",
     "node-notifier": "^10.0.1",
-    "electron-updater": "^6.3.9"
+    "nodemailer": "^8.0.9"
   },
   "devDependencies": {
     "electron": "^31.0.0",
