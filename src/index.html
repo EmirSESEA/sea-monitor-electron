@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>StatusPulse - Monitoreo de Sitios Web</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="index.css">
+</head>
+<body>
+  <div class="app-container">
+
+    <!-- UPDATE BANNER -->
+    <div id="update-banner" class="update-banner hidden">
+      <div class="update-banner-content">
+        <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+          <polyline points="7 10 12 15 17 10"/>
+          <line x1="12" y1="15" x2="12" y2="3"/>
+        </svg>
+        <span id="update-message">Hay una actualización disponible</span>
+      </div>
+      <div class="update-banner-actions">
+        <div class="update-progress-bar" id="update-progress-bar">
+          <div class="update-progress-fill" id="update-progress-fill"></div>
+        </div>
+        <button id="btn-install-update" class="btn btn-accent btn-sm hidden">Instalar y Reiniciar</button>
+        <button id="btn-dismiss-update" class="btn btn-ghost btn-sm" onclick="document.getElementById('update-banner').classList.add('hidden')">
+          <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+      </div>
+    </div>
+    
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="brand">
+        <div class="pulse-logo">
+          <div class="ring"></div>
+          <div class="dot"></div>
+        </div>
+        <h1>StatusPulse</h1>
+      </div>
+      
+      <!-- CONFIGURATION SECTION -->
+      <div class="config-section">
+        <div class="config-header">
+          <svg class="config-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>
+            <circle cx="12" cy="12" r="4"/>
+          </svg>
+          <div class="config-info">
+            <span class="config-title">Monitoreo Local</span>
+            <span class="config-filename">sitios.json</span>
+          </div>
+        </div>
+        <div class="config-actions">
+          <button id="btn-edit-sites" class="btn btn-outline btn-sm">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"></path>
+              <path d="M18.5 2.5a2.121 2.121 0 1 1 3 3L12 15l-4 1 1-4z"></path>
+            </svg>
+            Editar Lista
+          </button>
+          <button id="btn-reload-sites" class="btn btn-outline btn-sm">
+            <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+            </svg>
+            Recargar
+          </button>
+        </div>
+      </div>
+
+      <!-- COUNTER METRICS -->
+      <div class="metrics">
+        <button class="metric-card active" data-filter="all" id="metric-all">
+          <span class="metric-value" id="val-all">0</span>
+          <span class="metric-label">Todos</span>
+        </button>
+        <button class="metric-card" data-filter="active" id="metric-active">
+          <span class="metric-value text-green" id="val-active">0</span>
+          <span class="metric-label">Activos</span>
+        </button>
+        <button class="metric-card" data-filter="inactive" id="metric-inactive">
+          <span class="metric-value text-red" id="val-inactive">0</span>
+          <span class="metric-label">Inactivos</span>
+        </button>
+        <button class="metric-card" data-filter="pending" id="metric-pending">
+          <span class="metric-value text-yellow" id="val-pending">0</span>
+          <span class="metric-label">Pendientes</span>
+        </button>
+      </div>
+
+      <!-- MONITORING CONTROLS -->
+      <div class="controls-section">
+        <div class="control-group">
+          <label for="check-interval">Intervalo de Chequeo</label>
+          <div class="select-wrapper">
+            <select id="check-interval">
+              <option value="15000">15 Segundos</option>
+              <option value="30000" selected>30 Segundos</option>
+              <option value="60000">1 Minuto</option>
+              <option value="300000">5 Minutos</option>
+              <option value="600000">10 Minutos</option>
+            </select>
+          </div>
+        </div>
+
+        <div class="control-actions">
+          <button id="btn-start-monitor" class="btn btn-primary" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <polygon points="5 3 19 12 5 21 5 3"></polygon>
+            </svg>
+            Iniciar Monitoreo
+          </button>
+          <button id="btn-stop-monitor" class="btn btn-secondary hidden">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="currentColor">
+              <rect x="4" y="4" width="16" height="16" rx="2" ry="2"></rect>
+            </svg>
+            Detener
+          </button>
+          <button id="btn-check-now" class="btn btn-outline" disabled>
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"></path>
+            </svg>
+            Chequear Ahora
+          </button>
+        </div>
+      </div>
+
+      <!-- FOOTER -->
+      <div class="sidebar-footer">
+        <p>Monitor Webs</p>
+        <span class="version" id="app-version">v1.0.0</span>
+      </div>
+    </aside>
+
+    <!-- MAIN VIEW -->
+    <main class="main-content">
+      
+      <!-- TOP NAVIGATION BAR -->
+      <header class="top-bar">
+        <div class="search-box">
+          <svg class="search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="11" cy="11" r="8"></circle>
+            <line x1="21" y1="21" x2="16.65" y2="16.65"></line>
+          </svg>
+          <input type="text" id="search-input" placeholder="Buscar sitio por nombre o URL..." disabled>
+        </div>
+
+        <div class="status-indicator-bar">
+          <span class="status-text" id="monitor-global-status">Cargando...</span>
+          <div class="status-pulse-dot" id="global-pulse"></div>
+        </div>
+      </header>
+
+      <!-- CONTENT BODY -->
+      <section class="dashboard-body">
+        
+        <!-- INITIAL EMPTY STATE -->
+        <div class="empty-state hidden" id="empty-state">
+          <div class="empty-illustration">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+              <polyline points="14 2 14 8 20 8"></polyline>
+              <line x1="16" y1="13" x2="8" y2="13"></line>
+              <line x1="16" y1="17" x2="8" y2="17"></line>
+              <polyline points="10 9 9 9 8 9"></polyline>
+            </svg>
+          </div>
+          <h3>Carga tu listado de Excel</h3>
+          <p>Para comenzar a monitorear, arrastra o selecciona un archivo Excel (.xlsx, .xls) o CSV que contenga las direcciones de tus páginas web.</p>
+          <button class="btn btn-primary" id="btn-empty-upload">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+              <polyline points="17 8 12 3 7 8"></polyline>
+              <line x1="12" y1="3" x2="12" y2="15"></line>
+            </svg>
+            Seleccionar Excel
+          </button>
+        </div>
+
+        <!-- SITES GRID -->
+        <div class="sites-grid" id="sites-grid">
+          <!-- Dynamically populated card structure -->
+        </div>
+
+      </section>
+
+      <!-- EVENT LOG PANEL -->
+      <footer class="log-panel" id="log-panel">
+        <div class="log-header" id="log-header-toggle">
+          <div class="log-title">
+            <svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="8" y1="6" x2="21" y2="6"></line>
+              <line x1="8" y1="12" x2="21" y2="12"></line>
+              <line x1="8" y1="18" x2="21" y2="18"></line>
+              <line x1="3" y1="6" x2="3.01" y2="6"></line>
+              <line x1="3" y1="12" x2="3.01" y2="12"></line>
+              <line x1="3" y1="18" x2="3.01" y2="18"></line>
+            </svg>
+            <span>Historial de Eventos</span>
+          </div>
+          <div class="log-controls">
+            <button class="btn-clear-logs" id="btn-clear-logs" title="Limpiar historial">Limpiar</button>
+            <button class="btn-toggle-log" id="btn-toggle-log" title="Minimizar / Maximizar">
+              <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" stroke-width="2.5">
+                <polyline points="18 15 12 9 6 15"></polyline>
+              </svg>
+            </button>
+          </div>
+        </div>
+        <div class="log-content" id="log-content">
+          <div class="log-empty-msg">No hay eventos registrados aún. Inicia el monitoreo para registrar actividad.</div>
+        </div>
+      </footer>
+
+    </main>
+  </div>
+  
+  <script src="renderer.js"></script>
+</body>
+</html>
