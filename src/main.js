@@ -1,8 +1,12 @@
+require('dotenv').config();
+
 process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0'; // Bypass self-signed SSL errors on municipal/gov websites
 
 const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
 const path = require('path');
 const fs = require('fs');
+
+const nodemailer = require('nodemailer');
 
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
@@ -15,6 +19,56 @@ autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
 
 let mainWindow;
+
+async function sendAlertEmail(downSites) {
+
+  try {
+
+    const transporter = nodemailer.createTransport({
+      service: 'gmail',
+      auth: {
+        user: process.env.EMAIL_USER,
+        pass: process.env.EMAIL_PASS
+      }
+    });
+
+    const html = `
+      <h2>⚠️ Sitios caídos detectados</h2>
+
+      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width:100%;">
+        <tr>
+          <th>Sitio</th>
+          <th>URL</th>
+          <th>Error</th>
+        </tr>
+
+        ${downSites.map(site => `
+          <tr>
+            <td>${site.name}</td>
+            <td>${site.url}</td>
+            <td>${site.error}</td>
+          </tr>
+        `).join('')}
+
+      </table>
+    `;
+
+    await transporter.sendMail({
+      from: process.env.EMAIL_USER,
+      to: process.env.EMAIL_USER,
+      subject: '⚠️ Sitios caídos detectados',
+      html
+    });
+
+    console.log('Correo de alerta enviado');
+
+  } catch (error) {
+
+    console.error('Error enviando correo:');
+    console.error(error);
+
+  }
+}
 
 function createWindow() {
   mainWindow = new BrowserWindow({
@@ -316,6 +370,7 @@ ipcMain.handle('get-app-version', () => {
 
 // App Lifecycle
 app.whenReady().then(() => {
+
   createWindow();
 
   app.on('activate', () => {
