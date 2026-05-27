@@ -174,6 +174,28 @@ ipcMain.handle('show-notification', (event, { title, body }) => {
     new Notification({ title, body }).show();
   }
 });
+/* =========================
+   Handler faltante
+========================= */
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
+
+ipcMain.handle('load-sites-file', async () => {
+  try {
+    const filePath = path.join(__dirname, 'sitios.json');
+
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, '[]', 'utf8');
+    }
+
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
+
+  } catch (error) {
+    return { error: error.message };
+  }
+});
 
 /* =========================
    AUTO UPDATER
