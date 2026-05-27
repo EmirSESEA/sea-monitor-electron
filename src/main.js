@@ -1,20 +1,30 @@
 require('dotenv').config();
 
-// ⚠️ solo en desarrollo (más seguro)
-if (!require('electron').app?.isPackaged) {
-  process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
-}
+// ⚠️ Permitir certificados SSL problemáticos
+process.env.NODE_TLS_REJECT_UNAUTHORIZED = '0';
 
-const { app, BrowserWindow, ipcMain, dialog, Notification, shell } = require('electron');
+const {
+  app,
+  BrowserWindow,
+  ipcMain,
+  Notification
+} = require('electron');
+
 const path = require('path');
 const fs = require('fs');
 const nodemailer = require('nodemailer');
+const axios = require('axios');
+const https = require('https');
 
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
+/* =========================
+   LOGS
+========================= */
 log.transports.file.level = 'info';
 log.transports.console.level = 'debug';
+
 autoUpdater.logger = log;
 autoUpdater.autoDownload = true;
 autoUpdater.autoInstallOnAppQuit = true;
@@ -22,10 +32,16 @@ autoUpdater.autoInstallOnAppQuit = true;
 let mainWindow;
 
 /* =========================
-   EMAIL CONFIG (REUTILIZABLE)
+   EVITAR ALERTAS REPETIDAS
+========================= */
+const alertedSites = new Set();
+
+/* =========================
+   EMAIL CONFIG
 ========================= */
 const transporter = nodemailer.createTransport({
   service: 'gmail',
+
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
@@ -33,104 +49,346 @@ const transporter = nodemailer.createTransport({
 });
 
 /* =========================
-   ENVIAR ALERTA
+   ENVIAR ALERTA EMAIL
 ========================= */
 async function sendAlertEmail(downSites) {
+
   try {
-    if (!downSites || downSites.length === 0) return;
+
+    if (!downSites || downSites.length === 0) {
+      return;
+    }
+
+    console.log(
+      `📩 Enviando alerta (${downSites.length} sitios)`
+    );
 
     const html = `
-      <h2>⚠️ Sitios caídos detectados</h2>
+      <div style="font-family: Arial, sans-serif;">
 
-      <table border="1" cellpadding="8" cellspacing="0" style="border-collapse: collapse; width:100%;">
-        <tr>
-          <th>Sitio</th>
-          <th>URL</th>
-          <th>Error</th>
-        </tr>
+        <h2 style="color:#d32f2f;">
+          ⚠️ Sitios caídos detectados
+        </h2>
 
-        ${downSites.map(site => `
-          <tr>
-            <td>${site.name || ''}</td>
-            <td>${site.url}</td>
-            <td>${site.error || 'Sin detalle'}</td>
-          </tr>
-        `).join('')}
-      </table>
+        <table
+          border="1"
+          cellpadding="8"
+          cellspacing="0"
+          style="border-collapse: collapse; width:100%;"
+        >
+
+          <thead style="background:#f5f5f5;">
+            <tr>
+              <th>Sitio</th>
+              <th>URL</th>
+              <th>Error</th>
+              <th>Status</th>
+              <th>Tiempo</th>
+            </tr>
+          </thead>
+
+          <tbody>
+
+            ${downSites.map(site => `
+              <tr>
+
+                <td>
+                  ${site.name || 'Sin nombre'}
+                </td>
+
+                <td>
+                  <a href="${site.url}">
+                    ${site.url}
+                  </a>
+                </td>
+
+                <td style="color:red;">
+                  ${site.error || 'Sin detalle'}
+                </td>
+
+                <td>
+                  ${site.statusCode || 0}
+                </td>
+
+                <td>
+                  ${site.responseTime || 0} ms
+                </td>
+
+              </tr>
+            `).join('')}
+
+          </tbody>
+
+        </table>
+
+        <p style="margin-top:20px;color:#666;font-size:12px;">
+          Generado automáticamente por el monitor de URLs.
+        </p>
+
+      </div>
     `;
+
+    await transporter.verify();
 
     await transporter.sendMail({
       from: `"Monitor de URLs" <${process.env.EMAIL_USER}>`,
       to: process.env.EMAIL_USER,
-      subject: '⚠️ Sitios caídos detectados',
+      subject: `⚠️ ${downSites.length} sitio(s) caído(s) detectado(s)`,
       html
     });
 
-    console.log('📩 Correo de alerta enviado');
+    console.log('✅ Correo enviado');
+
   } catch (error) {
-    console.error('❌ Error enviando correo:', error);
+
+    console.error(
+      '❌ Error enviando correo:'
+    );
+
+    console.error(
+      error.message
+    );
   }
 }
 
 /* =========================
-   EJEMPLO: CHECK DE SITIO
+   VERIFICAR SITIO
 ========================= */
 async function checkStatus(url, name = '') {
-  const controller = new AbortController();
-  const timeoutId = setTimeout(() => controller.abort(), 12000);
 
   const startTime = Date.now();
 
   try {
-    const response = await fetch(url, {
+
+    // ✅ Validar URL
+    if (!url || typeof url !== 'string') {
+
+      return {
+        name: name || 'Sin nombre',
+        url: '',
+
+        status: 'inactive',
+
+        statusCode: 0,
+
+        responseTime: 0,
+
+        error: 'URL inválida'
+      };
+    }
+
+    // ✅ Limpiar espacios
+    url = url.trim();
+
+    // ✅ Agregar protocolo automáticamente
+    if (
+      !url.startsWith('http://') &&
+      !url.startsWith('https://')
+    ) {
+      url = `https://${url}`;
+    }
+
+    console.log(`🔎 Revisando: ${url}`);
+
+    const response = await axios({
+
       method: 'GET',
-      signal: controller.signal,
+
+      url,
+
+      timeout: 20000,
+
+      timeoutErrorMessage: 'Timeout',
+
+      maxRedirects: 10,
+
+      httpsAgent: new https.Agent({
+        rejectUnauthorized: false,
+        keepAlive: false
+      }),
+
+      validateStatus: () => true,
+
       headers: {
-        'User-Agent': 'Mozilla/5.0',
-        'Cache-Control': 'no-cache'
+
+        'User-Agent':
+          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122 Safari/537.36',
+
+        'Accept':
+          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+
+        'Accept-Language':
+          'es-MX,es;q=0.9',
+
+        'Cache-Control':
+          'no-cache',
+
+        'Pragma':
+          'no-cache'
       }
     });
 
-    clearTimeout(timeoutId);
+    const responseTime =
+      Date.now() - startTime;
 
-    const ok = response.status >= 200 && response.status < 400;
+    console.log(
+      `✅ ${url} -> ${response.status}`
+    );
+
+    // ✅ Considerar activo casi cualquier respuesta
+    const isUp =
+      response.status >= 200 &&
+      response.status < 600;
 
     return {
+
       name,
       url,
-      status: ok ? 'active' : 'inactive',
-      statusCode: response.status,
-      responseTime: Date.now() - startTime,
-      error: ok ? null : `HTTP ${response.status}`
+
+      status:
+        isUp
+          ? 'active'
+          : 'inactive',
+
+      statusCode:
+        response.status,
+
+      responseTime,
+
+      error:
+        isUp
+          ? null
+          : `HTTP ${response.status}`
     };
 
-  } catch (err) {
-    clearTimeout(timeoutId);
+  } catch (error) {
+
+    const responseTime =
+      Date.now() - startTime;
+
+    console.log('====================');
+    console.log(`❌ ${url}`);
+    console.log('MESSAGE:', error.message);
+    console.log('CODE:', error.code);
+    console.log('====================');
+
+    // ✅ Algunos errores NO significan caído
+    const recoverableErrors = [
+
+      'ECONNRESET',
+      'ETIMEDOUT',
+      'ECONNABORTED',
+
+      'ERR_BAD_SSL_CLIENT_AUTH_CERT',
+      'DEPTH_ZERO_SELF_SIGNED_CERT',
+
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+    ];
+
+    const isProbablyUp =
+      recoverableErrors.includes(error.code);
 
     return {
+
       name,
       url,
-      status: 'inactive',
+
+      status:
+        isProbablyUp
+          ? 'active'
+          : 'inactive',
+
       statusCode: 0,
-      responseTime: Date.now() - startTime,
-      error: err.message
+
+      responseTime,
+
+      error:
+        error.code ||
+        error.message ||
+        'Unknown error'
     };
   }
 }
 
 /* =========================
-   EJEMPLO: MONITOREO EN LOTE
-   (aquí es donde llamas el email)
+   MONITOREAR SITIOS
 ========================= */
 async function checkSites(sites) {
-  const results = await Promise.all(
-    sites.map(site => checkStatus(site.url, site.name))
+
+  console.log(
+    `🚀 Iniciando revisión de ${sites.length} sitios`
   );
 
-  const downSites = results.filter(s => s.status === 'inactive');
+  const results = [];
 
-  if (downSites.length > 0) {
-    await sendAlertEmail(downSites);
+  // ⚠️ Secuencial para evitar bloqueos
+  for (const site of sites) {
+    console.log(site);
+
+    const result = await checkStatus(
+      site.url,
+      site.name
+    );
+
+    results.push(result);
+
+    console.log(
+      `✔ ${site.name}: ${result.status}`
+    );
+  }
+
+  const downSites = results.filter(
+    s => s.status === 'inactive'
+  );
+
+  console.log(
+    `✅ Activos: ${results.filter(
+      s => s.status === 'active'
+    ).length
+    }`
+  );
+
+  console.log(
+    `❌ Inactivos: ${downSites.length}`
+  );
+
+  /* =========================
+     EVITAR ALERTAS REPETIDAS
+  ========================= */
+  const newDownSites =
+    downSites.filter(site => {
+
+      if (
+        alertedSites.has(site.url)
+      ) {
+        return false;
+      }
+
+      alertedSites.add(site.url);
+
+      return true;
+    });
+
+  /* =========================
+     LIMPIAR RECUPERADOS
+  ========================= */
+  results.forEach(site => {
+
+    if (
+      site.status === 'active'
+    ) {
+      alertedSites.delete(site.url);
+    }
+  });
+
+  /* =========================
+     ENVIAR ALERTA
+  ========================= */
+  if (newDownSites.length > 0) {
+
+    await sendAlertEmail(
+      newDownSites
+    );
   }
 
   return results;
@@ -140,103 +398,274 @@ async function checkSites(sites) {
    WINDOW
 ========================= */
 function createWindow() {
+
   mainWindow = new BrowserWindow({
+
     width: 1200,
     height: 800,
+
     minWidth: 900,
     minHeight: 600,
-    webPreferences: {
-      preload: path.join(__dirname, 'preload.js'),
-      contextIsolation: true,
-      nodeIntegration: false
-    },
+
     backgroundColor: '#0f172a',
-    show: false
+
+    // ✅ Mostrar inmediatamente para debug
+    show: true,
+
+    webPreferences: {
+      preload: path.join(
+        __dirname,
+        'preload.js'
+      ),
+
+      contextIsolation: true,
+
+      nodeIntegration: false
+    }
   });
 
-  mainWindow.loadFile(path.join(__dirname, 'index.html'));
+  // ✅ Cargar HTML
+  mainWindow.loadFile(
+    path.join(
+      __dirname,
+      'index.html'
+    )
+  );
 
-  mainWindow.once('ready-to-show', () => {
-    mainWindow.show();
-    if (app.isPackaged) setupAutoUpdater();
-  });
+
+  mainWindow.webContents.on(
+    'console-message',
+    (event, level, message, line, sourceId) => {
+
+      console.log('🖥️ RENDERER LOG:');
+      console.log(message);
+      console.log('LINE:', line);
+      console.log('SOURCE:', sourceId);
+    }
+  );
+
+  // ✅ Detectar errores de carga
+  mainWindow.webContents.on(
+    'did-fail-load',
+    (event, errorCode, errorDescription) => {
+
+      console.log(
+        '❌ Error cargando ventana:',
+        errorCode,
+        errorDescription
+      );
+    }
+  );
+
+  // ✅ Detectar crashes del renderer
+  mainWindow.webContents.on(
+    'render-process-gone',
+    (event, details) => {
+
+      console.log(
+        '❌ Renderer crashed:',
+        details
+      );
+    }
+  );
+
+  // ✅ AutoUpdater
+  if (app.isPackaged) {
+    setupAutoUpdater();
+  }
 }
 
 /* =========================
-   IPC SIMPLE (SIN XLSX)
+   IPC
 ========================= */
-ipcMain.handle('check-sites', async (event, sites) => {
-  return await checkSites(sites);
-});
+ipcMain.handle(
+  'check-sites',
+  async (event, sites) => {
 
-ipcMain.handle('show-notification', (event, { title, body }) => {
-  if (Notification.isSupported()) {
-    new Notification({ title, body }).show();
+    console.log('====================');
+    console.log('IPC check-sites');
+    console.log('TOTAL:', sites?.length);
+    console.log(sites);
+    console.log('====================');
+
+    return await checkSites(sites);
   }
-});
-/* =========================
-   Handler faltante
-========================= */
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion();
-});
+);
 
-ipcMain.handle('load-sites-file', async () => {
-  try {
-    const filePath = path.join(__dirname, 'sitios.json');
+ipcMain.handle(
+  'check-status',
+  async (event, site) => {
 
-    if (!fs.existsSync(filePath)) {
-      fs.writeFileSync(filePath, '[]', 'utf8');
+    return await checkStatus(
+      site.url,
+      site.name
+    );
+  }
+);
+
+ipcMain.handle(
+  'show-notification',
+  (
+    event,
+    { title, body }
+  ) => {
+
+    if (
+      Notification.isSupported()
+    ) {
+
+      new Notification({
+        title,
+        body
+      }).show();
     }
-
-    const data = fs.readFileSync(filePath, 'utf8');
-    return JSON.parse(data);
-
-  } catch (error) {
-    return { error: error.message };
   }
-});
+);
+
+ipcMain.handle(
+  'get-app-version',
+  () => {
+
+    return app.getVersion();
+  }
+);
+
+ipcMain.handle(
+  'load-sites-file',
+  async () => {
+
+    try {
+
+      const filePath = path.join(
+        __dirname,
+        'sitios.json'
+      );
+
+      console.log('📂 Cargando sitios.json');
+      console.log(filePath);
+
+      if (
+        !fs.existsSync(filePath)
+      ) {
+
+        fs.writeFileSync(
+          filePath,
+          '[]',
+          'utf8'
+        );
+      }
+
+      const data = fs.readFileSync(
+        filePath,
+        'utf8'
+      );
+
+      return JSON.parse(data);
+
+    } catch (error) {
+
+      console.error(error);
+
+      return {
+        error: error.message
+      };
+    }
+  }
+);
 
 /* =========================
    AUTO UPDATER
 ========================= */
 function setupAutoUpdater() {
-  autoUpdater.on('checking-for-update', () => {
-    mainWindow.webContents.send('update-status', { status: 'checking' });
-  });
 
-  autoUpdater.on('update-available', info => {
-    mainWindow.webContents.send('update-status', { status: 'available', version: info.version });
-  });
+  autoUpdater.on(
+    'checking-for-update',
+    () => {
 
-  autoUpdater.on('update-not-available', info => {
-    mainWindow.webContents.send('update-status', { status: 'not-available', version: info.version });
-  });
+      mainWindow.webContents.send(
+        'update-status',
+        {
+          status: 'checking'
+        }
+      );
+    }
+  );
 
-  autoUpdater.on('download-progress', progress => {
-    mainWindow.webContents.send('update-status', {
-      status: 'downloading',
-      percent: progress.percent
-    });
-  });
+  autoUpdater.on(
+    'update-available',
+    info => {
 
-  autoUpdater.on('update-downloaded', info => {
-    mainWindow.webContents.send('update-status', {
-      status: 'downloaded',
-      version: info.version
-    });
-  });
+      mainWindow.webContents.send(
+        'update-status',
+        {
+          status: 'available',
+          version: info.version
+        }
+      );
+    }
+  );
+
+  autoUpdater.on(
+    'update-not-available',
+    info => {
+
+      mainWindow.webContents.send(
+        'update-status',
+        {
+          status: 'not-available',
+          version: info.version
+        }
+      );
+    }
+  );
+
+  autoUpdater.on(
+    'download-progress',
+    progress => {
+
+      mainWindow.webContents.send(
+        'update-status',
+        {
+          status: 'downloading',
+          percent: progress.percent
+        }
+      );
+    }
+  );
+
+  autoUpdater.on(
+    'update-downloaded',
+    info => {
+
+      mainWindow.webContents.send(
+        'update-status',
+        {
+          status: 'downloaded',
+          version: info.version
+        }
+      );
+    }
+  );
 
   autoUpdater.checkForUpdatesAndNotify();
 }
 
 /* =========================
-   APP LIFECYCLE
+   APP
 ========================= */
 app.whenReady().then(() => {
+
   createWindow();
 });
 
-app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') app.quit();
-});
+app.on(
+  'window-all-closed',
+  () => {
+
+    if (
+      process.platform !== 'darwin'
+    ) {
+      app.quit();
+    }
+  }
+);

@@ -23,8 +23,14 @@ async function sendDownSitesEmail(downSites) {
 
   const htmlList = downSites.map(site => `
     <tr>
-      <td style="padding:8px;border:1px solid #ccc;">${safe(site.name)}</td>
-      <td style="padding:8px;border:1px solid #ccc;">${safe(site.url)}</td>
+      <td style="padding:8px;border:1px solid #ccc;">
+        ${safe(site.name)}
+      </td>
+
+      <td style="padding:8px;border:1px solid #ccc;">
+        ${safe(site.url)}
+      </td>
+
       <td style="padding:8px;border:1px solid #ccc;color:red;">
         ${safe(site.error)}
       </td>
@@ -35,6 +41,7 @@ async function sendDownSitesEmail(downSites) {
     from: `"Monitor de URLs" <${process.env.EMAIL_USER}>`,
     to: process.env.EMAIL_USER,
     subject: '⚠️ Sitios caídos detectados',
+
     html: `
       <h2>Se detectaron sitios caídos</h2>
 
@@ -46,6 +53,7 @@ async function sendDownSitesEmail(downSites) {
             <th style="padding:8px;border:1px solid #ccc;">Error</th>
           </tr>
         </thead>
+
         <tbody>
           ${htmlList}
         </tbody>
@@ -53,10 +61,20 @@ async function sendDownSitesEmail(downSites) {
     `
   };
 
-  await transporter.verify();
-  await transporter.sendMail(mailOptions);
+  try {
+    console.log('Verificando conexión SMTP...');
 
-  console.log('Correo enviado');
+    await transporter.verify();
+
+    console.log('Enviando correo...');
+
+    await transporter.sendMail(mailOptions);
+
+    console.log('Correo enviado');
+
+  } catch (error) {
+    console.error('Error enviando correo:', error);
+  }
 }
 
 module.exports = {

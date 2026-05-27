@@ -149,7 +149,7 @@ async function loadSitesFromConfig() {
     addLog('La lista de sitios está vacía o el archivo sitios.json está mal formateado.', 'warn');
     emptyState.classList.remove('hidden');
     sitesGrid.classList.add('hidden');
-    
+
     // Disable controls
     btnStartMonitor.setAttribute('disabled', 'true');
     btnCheckNow.setAttribute('disabled', 'true');
@@ -208,9 +208,9 @@ function renderGrid() {
   // Filter sites
   const filteredSites = sites.filter(site => {
     // Filter by search query
-    const matchesSearch = site.name.toLowerCase().includes(searchQuery) || 
-                          site.url.toLowerCase().includes(searchQuery);
-    
+    const matchesSearch = site.name.toLowerCase().includes(searchQuery) ||
+      site.url.toLowerCase().includes(searchQuery);
+
     if (!matchesSearch) return false;
 
     // Filter by metric state
@@ -308,11 +308,14 @@ async function checkSiteStatus(index) {
   // Temporarily set to pending for UI animation
   site.status = 'pending';
   site.statusText = 'Verificando...';
-  
+
   renderGrid();
   updateMetrics();
 
-  const result = await window.api.checkStatus(site.url);
+  const result = await window.api.checkStatus({
+    url: site.url,
+    name: site.name
+  });
 
   // Time format
   const now = new Date();
@@ -401,7 +404,7 @@ function startMonitoring() {
 
   const intervalTime = parseInt(checkIntervalSelect.value);
   addLog(`Monitoreo automático activado (cada ${intervalTime / 1000} segundos)`, 'info');
-  
+
   // Do a verification run immediately
   checkAllSites();
 
