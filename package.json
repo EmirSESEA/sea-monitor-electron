@@ -119,6 +119,7 @@
     "nodemailer": "^8.0.9"
   },
   "devDependencies": {
+    "cross-env": "^10.1.0",
     "electron": "^31.0.0",
     "electron-builder": "^25.1.8"
   }
