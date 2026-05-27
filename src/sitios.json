@@ -1,5 +1,21 @@
 [
   {
+    "name": "Publico SESEA",
+    "url": "https://publico.seseaguanajuato.org/"
+  },
+  {
+    "name": "Intranet",
+    "url": "https://intranet.seseaguanajuato.org/"
+  },
+  {
+    "name": "Cron Declaranet",
+    "url": "https://ms.seseaguanajuato.org/api/public/enviocorreosdeclaranet"
+  },
+  {
+    "name": "Kuma",
+    "url": "https://kuma.seseaguanajuato.org/settings/docker-hosts"
+  },
+  {
     "name": "Poder Ejecutivo",
     "url": "https://transparencia.guanajuato.gob.mx/transparencia/informacion_publica_pordependencia.php?dependencia=38"
   },
