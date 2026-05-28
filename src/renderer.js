@@ -8,6 +8,7 @@ let searchQuery = '';
 // DOM ELEMENTS
 const btnEditSites = document.getElementById('btn-edit-sites');
 const btnReloadSites = document.getElementById('btn-reload-sites');
+const btnEmptyEdit = document.getElementById('btn-empty-edit');
 
 const metricAll = document.getElementById('metric-all');
 const metricActive = document.getElementById('metric-active');
@@ -92,6 +93,11 @@ function setupEventListeners() {
 
   btnReloadSites.addEventListener('click', () => {
     loadSitesFromConfig();
+  });
+
+  btnEmptyEdit.addEventListener('click', () => {
+    addLog('Abriendo archivo sitios.json para edición...', 'info');
+    window.api.editSitesFile();
   });
 
   // Monitoring Controls

@@ -25,13 +25,5 @@ npm-debug.log*
 .vscode/
 .idea/
 
-# Temporary excel lock files
-~$*.xlsx
-~$*.xls
-
-# Stale root-level scripts (not part of the app)
-emailService.js
-create-test-excel.js
-
 # Generated icon sizes (only icon.ico, icon.icns, and icon.png are needed)
 build/icons/
