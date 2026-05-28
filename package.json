@@ -91,7 +91,7 @@
       "gatekeeperAssess": false
     },
     "dmg": {
-      "title": "Monitor Webs ${version}",
+      "title": "Monitor Webs ${version} ${arch}",
       "contents": [
         {
           "x": 130,
