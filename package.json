@@ -65,7 +65,7 @@
       ],
       "icon": "build/icon.ico",
       "requestedExecutionLevel": "asInvoker",
-      "artifactName": "${productName}-Setup-${version}.${ext}"
+      "artifactName": "Monitor-Webs-Setup-${version}.${ext}"
     },
     "nsis": {
       "oneClick": false,
@@ -95,7 +95,7 @@
       ],
       "icon": "build/icon.icns",
       "category": "public.app-category.utilities",
-      "artifactName": "${productName}-${version}-${arch}.${ext}",
+      "artifactName": "Monitor-Webs-${version}-${arch}.${ext}",
       "hardenedRuntime": true,
       "gatekeeperAssess": false
     },
