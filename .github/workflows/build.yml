@@ -39,10 +39,9 @@ jobs:
 
       - name: Build Windows installer
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Deshabilitar firma de código (sin certificado)
           CSC_IDENTITY_AUTO_DISCOVERY: false
-        run: npm run publish:win
+        run: npm run build:win
 
       - name: Upload Windows artifacts
         uses: actions/upload-artifact@v4
@@ -51,7 +50,8 @@ jobs:
           path: |
             dist/*.exe
             dist/*.yml
-          retention-days: 30
+            dist/*.blockmap
+          retention-days: 7
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────
@@ -82,18 +82,11 @@ jobs:
           fi
           echo "✅ Iconos verificados correctamente"
 
-      - name: Build macOS DMG
+      - name: Build macOS DMG & ZIP
         env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           # Deshabilitar firma de código (sin certificado Apple Developer)
           CSC_IDENTITY_AUTO_DISCOVERY: false
-          # Si tienes certificado Apple Developer, descomenta estas líneas y agrega los secrets:
-          # CSC_LINK: ${{ secrets.MAC_CERTIFICATE }}
-          # CSC_KEY_PASSWORD: ${{ secrets.MAC_CERTIFICATE_PASSWORD }}
-          # APPLE_ID: ${{ secrets.APPLE_ID }}
-          # APPLE_APP_SPECIFIC_PASSWORD: ${{ secrets.APPLE_APP_SPECIFIC_PASSWORD }}
-          # APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
-        run: npm run publish:mac
+        run: npm run build:mac
 
       - name: Upload macOS artifacts
         uses: actions/upload-artifact@v4
@@ -103,25 +96,44 @@ jobs:
             dist/*.dmg
             dist/*.zip
             dist/*.yml
-          retention-days: 30
+            dist/*.blockmap
+          retention-days: 7
           if-no-files-found: error
 
   # ─────────────────────────────────────────────────────────
-  # Notificación de release completado
+  # Publicar release único en GitHub
   # ─────────────────────────────────────────────────────────
-  notify-release:
-    name: Release Summary
+  publish-release:
+    name: Create & Publish GitHub Release
     runs-on: ubuntu-latest
     needs: [build-windows, build-macos]
-    if: always()
 
     steps:
-      - name: Release status
+      - name: Download Windows artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: windows-installers
+          path: ./artifacts
+
+      - name: Download macOS artifacts
+        uses: actions/download-artifact@v4
+        with:
+          name: macos-installers
+          path: ./artifacts
+
+      - name: Create Release and Upload Assets
+        uses: softprops/action-gh-release@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          files: |
+            ./artifacts/*
+          draft: false
+          prerelease: false
+          generate_release_notes: true
+
+      - name: Build Summary
         run: |
-          echo "## 📦 Build Summary" >> $GITHUB_STEP_SUMMARY
-          echo "| Platform | Status |" >> $GITHUB_STEP_SUMMARY
-          echo "|----------|--------|" >> $GITHUB_STEP_SUMMARY
-          echo "| Windows  | ${{ needs.build-windows.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "| macOS    | ${{ needs.build-macos.result == 'success' && '✅ Success' || '❌ Failed' }} |" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📦 Release Summary" >> $GITHUB_STEP_SUMMARY
           echo "Tag: **${{ github.ref_name }}**" >> $GITHUB_STEP_SUMMARY
+          echo "Todos los instalables para Windows y macOS han sido empaquetados y subidos a la sección de Releases con éxito. ✅" >> $GITHUB_STEP_SUMMARY

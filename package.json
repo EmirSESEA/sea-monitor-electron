@@ -33,15 +33,6 @@
       "src/**/*",
       "package.json"
     ],
-    "extraResources": [
-      {
-        "from": "build/icons",
-        "to": "icons",
-        "filter": [
-          "**/*.png"
-        ]
-      }
-    ],
     "publish": {
       "provider": "github",
       "owner": "EmirSESEA",
