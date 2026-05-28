@@ -41,7 +41,7 @@ const btnToggleLog = document.getElementById('btn-toggle-log');
 // INITIALIZATION
 window.addEventListener('DOMContentLoaded', () => {
   setupEventListeners();
-  addLog('Sistema StatusPulse iniciado y listo.', 'info');
+  addLog('Sistema de Monitorero WEB iniciado y listo.', 'info');
   loadSitesFromConfig(); // Auto-load predefined sites list on startup
 });
 
