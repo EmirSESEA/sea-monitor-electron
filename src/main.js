@@ -524,6 +524,38 @@ ipcMain.handle(
 );
 
 ipcMain.handle(
+  'report-results',
+  async (event, results) => {
+    if (!results || !Array.isArray(results)) return;
+
+    const downSites = results.filter(
+      s => s.status === 'inactive'
+    );
+
+    // Filter out sites that are already alerted
+    const newDownSites = downSites.filter(site => {
+      if (alertedSites.has(site.url)) {
+        return false;
+      }
+      alertedSites.add(site.url);
+      return true;
+    });
+
+    // Remove from alerted list those that recovered (are active now)
+    results.forEach(site => {
+      if (site.status === 'active') {
+        alertedSites.delete(site.url);
+      }
+    });
+
+    // Send email alert if there are new down sites
+    if (newDownSites.length > 0) {
+      await sendAlertEmail(newDownSites);
+    }
+  }
+);
+
+ipcMain.handle(
   'get-app-version',
   () => {
 

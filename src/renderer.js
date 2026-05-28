@@ -385,6 +385,17 @@ async function checkAllSites() {
   addLog('Monitoreo completado para todos los sitios.', 'info');
   btnCheckNow.removeAttribute('disabled');
 
+  // Report results to the main process to trigger email alerts
+  const resultsToReport = sites.map(s => ({
+    name: s.name,
+    url: s.url,
+    status: s.status,
+    statusCode: s.statusCode,
+    responseTime: s.responseTime,
+    error: s.error
+  }));
+  window.api.reportResults(resultsToReport);
+
   if (monitoringActive) {
     monitorGlobalStatus.textContent = 'Monitoreando';
     globalPulse.className = 'status-pulse-dot running';

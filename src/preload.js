@@ -23,6 +23,9 @@ contextBridge.exposeInMainWorld('api', {
       { title, body }
     ),
 
+  reportResults: (results) =>
+    ipcRenderer.invoke('report-results', results),
+
   // =========================
   // APP
   // =========================
