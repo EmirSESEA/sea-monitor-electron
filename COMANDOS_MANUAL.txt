@@ -1,0 +1,160 @@
+================================================================================
+  MONITOR WEBS - GUÍA DE COMANDOS MANUALES
+  Proceso completo: compilar, subir a GitHub y generar instaladores
+================================================================================
+
+REQUISITOS PREVIOS:
+  - Node.js 20+ instalado
+  - Git instalado y configurado
+  - Acceso al repositorio: https://github.com/EmirSESEA/Monitor_Webs
+
+================================================================================
+ PASO 1: PREPARAR EL PROYECTO
+================================================================================
+
+  Abrir terminal en la carpeta del proyecto:
+
+    cd d:\Proyectos\sesea-monitor-electron
+
+  Instalar dependencias (solo si es la primera vez o se modificó package.json):
+
+    npm install
+
+================================================================================
+ PASO 2: PROBAR LA APLICACIÓN LOCALMENTE
+================================================================================
+
+  Ejecutar en modo desarrollo:
+
+    npm start
+
+  (Cerrar la app cuando termines de probar)
+
+================================================================================
+ PASO 3: COMPILAR INSTALADOR LOCALMENTE (OPCIONAL - SOLO PARA PROBAR)
+================================================================================
+
+  Compilar instalador de Windows (sin publicar):
+
+    npm run build:win
+
+  Los archivos se generan en la carpeta "dist/":
+    - dist\Monitor-Webs-Setup-1.0.0.exe  (instalador NSIS)
+    - dist\Monitor Webs-Setup-1.0.0.exe  (portable)
+
+  NOTA: Para macOS solo se puede compilar desde una Mac:
+
+    npm run build:mac
+
+================================================================================
+ PASO 4: SUBIR CAMBIOS A GITHUB
+================================================================================
+
+  4.1 Ver qué archivos cambiaron:
+
+    git status
+
+  4.2 Agregar todos los cambios:
+
+    git add .
+
+  4.3 Hacer commit con un mensaje descriptivo:
+
+    git commit -m "descripción de los cambios realizados"
+
+  4.4 Subir al repositorio remoto:
+
+    git push origin main
+
+================================================================================
+ PASO 5: GENERAR INSTALADORES AUTOMÁTICAMENTE (WINDOWS + MACOS)
+================================================================================
+
+  El workflow de GitHub Actions se activa automáticamente cuando se sube
+  un tag de versión (ejemplo: v1.0.0, v1.2.3, etc.)
+
+  5.1 Actualizar la versión en package.json (si es necesario):
+
+    Editar manualmente el campo "version" en package.json
+    Ejemplo: "version": "1.1.0"
+
+    Luego hacer commit y push:
+
+      git add package.json
+      git commit -m "bump: version 1.1.0"
+      git push origin main
+
+  5.2 Crear un tag de versión:
+
+    git tag -a v1.1.0 -m "Release v1.1.0 - descripción del release"
+
+  5.3 Subir el tag a GitHub (esto dispara el build automático):
+
+    git push origin v1.1.0
+
+  5.4 Monitorear el progreso en:
+
+    https://github.com/EmirSESEA/Monitor_Webs/actions
+
+  5.5 Cuando termine, los instaladores estarán en:
+
+    https://github.com/EmirSESEA/Monitor_Webs/releases
+
+    Se generan automáticamente:
+      - Windows: Monitor-Webs-Setup-X.X.X.exe
+      - macOS:   Monitor-Webs-X.X.X-x64.dmg (Intel)
+                  Monitor-Webs-X.X.X-arm64.dmg (Apple Silicon)
+                  Monitor-Webs-X.X.X-x64.zip
+                  Monitor-Webs-X.X.X-arm64.zip
+
+================================================================================
+ CASO ESPECIAL: RE-HACER UN RELEASE QUE FALLÓ
+================================================================================
+
+  Si el workflow falló y necesitas volver a dispararlo con el mismo tag:
+
+  1. Eliminar el tag local:
+
+    git tag -d v1.1.0
+
+  2. Eliminar el tag remoto:
+
+    git push origin :refs/tags/v1.1.0
+
+  3. Eliminar el release en GitHub (si se creó parcialmente):
+
+    Ir a https://github.com/EmirSESEA/Monitor_Webs/releases
+    Hacer clic en el release -> "Delete this release"
+
+  4. Recrear el tag y subirlo de nuevo:
+
+    git tag -a v1.1.0 -m "Release v1.1.0"
+    git push origin v1.1.0
+
+================================================================================
+ RESUMEN RÁPIDO (FLUJO COMPLETO EN ORDEN)
+================================================================================
+
+  1.  npm install                          (instalar dependencias)
+  2.  npm start                            (probar la app)
+  3.  git add .                            (agregar cambios)
+  4.  git commit -m "mensaje"              (hacer commit)
+  5.  git push origin main                 (subir a GitHub)
+  6.  git tag -a v1.0.0 -m "Release"       (crear tag de versión)
+  7.  git push origin v1.0.0               (subir tag = dispara build)
+  8.  Esperar en GitHub Actions             (se generan los instaladores)
+  9.  Descargar desde GitHub Releases       (instaladores listos)
+
+================================================================================
+ SCRIPT AUTOMÁTICO (ALTERNATIVA)
+================================================================================
+
+  También puedes usar el script de release incluido:
+
+    node scripts/release.js patch     (incrementa 1.0.0 -> 1.0.1)
+    node scripts/release.js minor     (incrementa 1.0.0 -> 1.1.0)
+    node scripts/release.js major     (incrementa 1.0.0 -> 2.0.0)
+
+  Este script hace automáticamente los pasos 5.1 al 5.3.
+
+================================================================================
