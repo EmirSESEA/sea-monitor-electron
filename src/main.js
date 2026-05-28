@@ -131,9 +131,12 @@ async function sendAlertEmail(downSites) {
 
     await transporter.verify();
 
+    // Destinatarios: EMAIL_TO (separados por coma) o EMAIL_USER como fallback
+    const recipients = process.env.EMAIL_TO || process.env.EMAIL_USER;
+
     await transporter.sendMail({
       from: `"Monitor de URLs" <${process.env.EMAIL_USER}>`,
-      to: process.env.EMAIL_USER,
+      to: recipients,
       subject: `⚠️ ${downSites.length} sitio(s) caído(s) detectado(s)`,
       html
     });
