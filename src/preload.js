@@ -29,6 +29,9 @@ contextBridge.exposeInMainWorld('api', {
   getAppVersion: () =>
     ipcRenderer.invoke('get-app-version'),
 
+  editSitesFile: () =>
+    ipcRenderer.invoke('edit-sites-file'),
+
   // =========================
   // AUTO UPDATER
   // =========================
@@ -37,6 +40,9 @@ contextBridge.exposeInMainWorld('api', {
       'update-status',
       (_event, data) => callback(data)
     ),
+
+  installUpdate: () =>
+    ipcRenderer.invoke('install-update'),
 
   removeUpdateListeners: () =>
     ipcRenderer.removeAllListeners(

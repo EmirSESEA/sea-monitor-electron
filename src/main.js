@@ -574,6 +574,29 @@ ipcMain.handle(
   }
 );
 
+ipcMain.handle(
+  'edit-sites-file',
+  async () => {
+
+    const { shell } = require('electron');
+
+    const filePath = path.join(
+      __dirname,
+      'sitios.json'
+    );
+
+    shell.openPath(filePath);
+  }
+);
+
+ipcMain.handle(
+  'install-update',
+  () => {
+
+    autoUpdater.quitAndInstall();
+  }
+);
+
 /* =========================
    AUTO UPDATER
 ========================= */

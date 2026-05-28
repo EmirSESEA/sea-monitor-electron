@@ -10,7 +10,8 @@
     "build:mac": "electron-builder --mac",
     "build:all": "electron-builder --win --mac",
     "publish:win": "electron-builder --win --publish always",
-    "publish:mac": "electron-builder --mac --publish always"
+    "publish:mac": "electron-builder --mac --publish always",
+    "release": "node scripts/release.js"
   },
   "keywords": [
     "monitor",
@@ -31,6 +32,13 @@
     "files": [
       "src/**/*",
       "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "build/icons",
+        "to": "icons",
+        "filter": ["**/*.png"]
+      }
     ],
     "publish": {
       "provider": "github",
