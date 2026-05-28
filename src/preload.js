@@ -50,14 +50,5 @@ contextBridge.exposeInMainWorld('api', {
   removeUpdateListeners: () =>
     ipcRenderer.removeAllListeners(
       'update-status'
-    ),
-
-  // =========================
-  // LOGS DEL PROCESO PRINCIPAL
-  // =========================
-  onMainLog: (callback) =>
-    ipcRenderer.on(
-      'main-log',
-      (_event, data) => callback(data)
-    )
+  
 });
