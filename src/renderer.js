@@ -472,7 +472,6 @@ function stopMonitoring() {
   window.api.onUpdateStatus((data) => {
     switch (data.status) {
       case 'checking':
-        // Don't show banner for routine checks
         break;
 
       case 'available':
@@ -498,11 +497,9 @@ function stopMonitoring() {
         break;
 
       case 'not-available':
-        // Everything up to date — no banner needed
         break;
 
       case 'error':
-        // Only show briefly if we were already showing the banner
         if (!updateBanner.classList.contains('hidden')) {
           updateMessage.textContent = `Error al actualizar: ${data.message}`;
           updateProgressBar.classList.remove('visible');
@@ -512,7 +509,6 @@ function stopMonitoring() {
     }
   });
 
-  // Install button: quit and install
   if (btnInstallUpdate) {
     btnInstallUpdate.addEventListener('click', () => {
       addLog('Instalando actualización y reiniciando...', 'info');
@@ -520,3 +516,41 @@ function stopMonitoring() {
     });
   }
 })();
+
+/* =======================================================
+   🔥 ESCUCHAR ACTUALIZACIONES EN SEGUNDO PLANO DESDE EL MAIN
+======================================================= */
+if (window.api && typeof window.api.onBackgroundUpdate === 'function') {
+  window.api.onBackgroundUpdate((results) => {
+    console.log("🔄 Actualización automática de fondo recibida:", results);
+
+    // Formatear la hora actual para el registro
+    const now = new Date();
+    const timeStr = String(now.getHours()).padStart(2, '0') + ':' + String(now.getMinutes()).padStart(2, '0') + ':' + String(now.getSeconds()).padStart(2, '0');
+
+    // Sincronizar el resultado del Backend con el Estado Global (array 'sites') del Frontend
+    results.forEach(res => {
+      const matchSite = sites.find(s => s.url === res.url);
+      if (matchSite) {
+        matchSite.status = res.status;
+        matchSite.statusCode = res.statusCode;
+        matchSite.statusText = res.statusText;
+        matchSite.responseTime = res.responseTime;
+        matchSite.error = res.error;
+        matchSite.lastChecked = timeStr;
+      }
+    });
+
+    // Forzar el redibujado nativo de la UI
+    renderGrid();
+    updateMetrics();
+
+    // Insertar la alerta directamente en tu historial de eventos (log-panel)
+    const inactivos = results.filter(s => s.status === 'inactive');
+    if (inactivos.length > 0) {
+      addLog(`🔄 [Auto Check] Alerta: ${inactivos.length} sitio(s) caído(s) detectado(s).`, 'warn');
+    } else {
+      addLog(`🔄 [Auto Check] Todos los sitios web están estables y respondiendo.`, 'success');
+    }
+  });
+}

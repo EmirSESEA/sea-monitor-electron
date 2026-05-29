@@ -183,11 +183,7 @@ async function checkStatus(url, name = '') {
     const responseTime = Date.now() - startTime;
     console.log(`✅ ${url} -> ${response.status}`);
 
-    // =======================================================
-    // NUEVA LÓGICA DE DETECCIÓN DE ESTADO (Solución al 403)
-    // =======================================================
-    // Un sitio está ACTIVO si responde exitosamente (2xx/3xx) 
-    // o si el servidor deniega el acceso pero responde (401, 403, 405).
+    // Un sitio está ACTIVO si responde exitosamente (2xx/3xx) o si el servidor deniega el acceso pero responde (401, 403, 405).
     const allowedErrorStatuses = [401, 403, 405];
 
     const isUp =
@@ -249,13 +245,14 @@ async function checkStatus(url, name = '') {
 /* =========================
    MONITOREAR SITIOS
 ========================= */
-async function checkSites(sites) {
-  console.log(`🚀 Iniciando revisión de ${sites.length} sitios`);
+async function checkSites(sites, isBackground = false) {
+  if (!sites || sites.length === 0) return [];
+
+  console.log(`🚀 Iniciando revisión de ${sites.length} sitios ${isBackground ? '(En segundo plano)' : ''}`);
   const results = [];
 
-  // ⚠️ Secuencial para evitar bloqueos por ráfagas
+  // Secuencial para evitar bloqueos por ráfagas
   for (const site of sites) {
-    console.log(site);
     const result = await checkStatus(site.url, site.name);
     results.push(result);
     console.log(`✔ ${site.name}: ${result.status}`);
@@ -266,16 +263,27 @@ async function checkSites(sites) {
   console.log(`✅ Activos: ${results.filter(s => s.status === 'active').length}`);
   console.log(`❌ Inactivos: ${downSites.length}`);
 
-  /* =========================
-     EVITAR ALERTAS REPETIDAS
-  ========================= */
-  const newDownSites = downSites.filter(site => {
-    if (alertedSites.has(site.url)) {
-      return false;
+  /* =======================================================
+     MODIFICACIÓN: NOTIFICAR SIEMPRE SI SIGUE CAÍDO
+     ======================================================= */
+  // Si se ejecuta en segundo plano por el temporizador, te enviará 
+  // un correo cada 5/10 min con TODOS los sitios que sigan caídos.
+  if (isBackground) {
+    if (downSites.length > 0) {
+      await sendAlertEmail(downSites);
     }
-    alertedSites.add(site.url);
-    return true;
-  });
+  } else {
+    // Si viene del Front-end (clic manual), mantiene tu filtro original anti-repetición
+    const newDownSites = downSites.filter(site => {
+      if (alertedSites.has(site.url)) return false;
+      alertedSites.add(site.url);
+      return true;
+    });
+
+    if (newDownSites.length > 0) {
+      await sendAlertEmail(newDownSites);
+    }
+  }
 
   /* =========================
      LIMPIAR RECUPERADOS
@@ -286,14 +294,40 @@ async function checkSites(sites) {
     }
   });
 
-  /* =========================
-     ENVIAR ALERTA
-  ========================= */
-  if (newDownSites.length > 0) {
-    await sendAlertEmail(newDownSites);
+  // Si la ventana del Front-end está abierta, le enviamos los resultados actualizados en vivo
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('bg-check-results', results);
   }
 
   return results;
+}
+
+/* =======================================================
+   NUEVO: MONITOREO AUTOMÁTICO EN SEGUNDO PLANO (CRON)
+======================================================= */
+function startBackgroundMonitoring() {
+  // Ajusta el tiempo aquí: 
+  // 5 minutos = 5 * 60 * 1000 = 300000 ms
+  // 10 minutos = 10 * 60 * 1000 = 600000 ms
+  const INTERVALO_TIEMPO = 5 * 60 * 1000;
+
+  console.log(`⏱️ Temporizador configurado cada ${INTERVALO_TIEMPO / 60000} minutos.`);
+
+  setInterval(async () => {
+    try {
+      const filePath = path.join(__dirname, 'sitios.json');
+      if (fs.existsSync(filePath)) {
+        const data = fs.readFileSync(filePath, 'utf8');
+        const sites = JSON.parse(data);
+
+        if (sites && sites.length > 0) {
+          await checkSites(sites, true); // true activa el envío de correo periódico
+        }
+      }
+    } catch (error) {
+      console.error('❌ Error en el monitoreo en segundo plano:', error.message);
+    }
+  }, INTERVALO_TIEMPO);
 }
 
 /* =========================
@@ -306,7 +340,7 @@ function createWindow() {
     minWidth: 900,
     minHeight: 600,
     backgroundColor: '#0f172a',
-    show: true, // Mostrar inmediatamente para debug
+    show: true,
     webPreferences: {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
@@ -314,27 +348,12 @@ function createWindow() {
     }
   });
 
-  // ✅ Cargar HTML
   mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
   mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
-    console.log('🖥️ RENDERER LOG:');
-    console.log(message);
-    console.log('LINE:', line);
-    console.log('SOURCE:', sourceId);
+    console.log('🖥️ RENDERER LOG:', message);
   });
 
-  // ✅ Detectar errores de carga
-  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
-    console.log('❌ Error cargando ventana:', errorCode, errorDescription);
-  });
-
-  // ✅ Detectar crashes del renderer
-  mainWindow.webContents.on('render-process-gone', (event, details) => {
-    console.log('❌ Renderer crashed:', details);
-  });
-
-  // ✅ AutoUpdater
   if (app.isPackaged) {
     setupAutoUpdater();
   }
@@ -344,12 +363,7 @@ function createWindow() {
    IPC HANDLERS
 ========================= */
 ipcMain.handle('check-sites', async (event, sites) => {
-  console.log('====================');
-  console.log('IPC check-sites');
-  console.log('TOTAL:', sites?.length);
-  console.log(sites);
-  console.log('====================');
-  return await checkSites(sites);
+  return await checkSites(sites, false); // false = primera verificación / manual
 });
 
 ipcMain.handle('check-status', async (event, site) => {
@@ -364,46 +378,23 @@ ipcMain.handle('show-notification', (event, { title, body }) => {
 
 ipcMain.handle('report-results', async (event, results) => {
   if (!results || !Array.isArray(results)) return;
-
   const downSites = results.filter(s => s.status === 'inactive');
-
-  const newDownSites = downSites.filter(site => {
-    if (alertedSites.has(site.url)) {
-      return false;
-    }
-    alertedSites.add(site.url);
-    return true;
-  });
-
-  results.forEach(site => {
-    if (site.status === 'active') {
-      alertedSites.delete(site.url);
-    }
-  });
-
-  if (newDownSites.length > 0) {
-    await sendAlertEmail(newDownSites);
+  if (downSites.length > 0) {
+    await sendAlertEmail(downSites);
   }
 });
 
-ipcMain.handle('get-app-version', () => {
-  return app.getVersion();
-});
+ipcMain.handle('get-app-version', () => app.getVersion());
 
 ipcMain.handle('load-sites-file', async () => {
   try {
     const filePath = path.join(__dirname, 'sitios.json');
-    console.log('📂 Cargando sitios.json');
-    console.log(filePath);
-
     if (!fs.existsSync(filePath)) {
       fs.writeFileSync(filePath, '[]', 'utf8');
     }
-
     const data = fs.readFileSync(filePath, 'utf8');
     return JSON.parse(data);
   } catch (error) {
-    console.error(error);
     return { error: error.message };
   }
 });
@@ -422,26 +413,6 @@ ipcMain.handle('install-update', () => {
    AUTO UPDATER
 ========================= */
 function setupAutoUpdater() {
-  autoUpdater.on('checking-for-update', () => {
-    mainWindow.webContents.send('update-status', { status: 'checking' });
-  });
-
-  autoUpdater.on('update-available', info => {
-    mainWindow.webContents.send('update-status', { status: 'available', version: info.version });
-  });
-
-  autoUpdater.on('update-not-available', info => {
-    mainWindow.webContents.send('update-status', { status: 'not-available', version: info.version });
-  });
-
-  autoUpdater.on('download-progress', progress => {
-    mainWindow.webContents.send('update-status', { status: 'downloading', percent: progress.percent });
-  });
-
-  autoUpdater.on('update-downloaded', info => {
-    mainWindow.webContents.send('update-status', { status: 'downloaded', version: info.version });
-  });
-
   autoUpdater.checkForUpdatesAndNotify();
 }
 
@@ -450,6 +421,9 @@ function setupAutoUpdater() {
 ========================= */
 app.whenReady().then(() => {
   createWindow();
+
+  // 🔥 Arrancar el monitoreo automático en cuanto la app esté lista
+  startBackgroundMonitoring();
 });
 
 app.on('window-all-closed', () => {

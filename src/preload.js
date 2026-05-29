@@ -1,9 +1,21 @@
 const { contextBridge, ipcRenderer } = require('electron');
 
-contextBridge.exposeInMainWorld('api', {
+contextBridge.exposeInMainWorld('api', { // 👈 Aseguramos que se llame 'api'
 
   // =========================
-  // MONITOREO
+  // ESCUCHADORES DESDE EL MAIN
+  // =========================
+  onBackgroundUpdate: (callback) =>
+    ipcRenderer.on('bg-check-results', (_event, value) => callback(value)),
+
+  onUpdateStatus: (callback) =>
+    ipcRenderer.on('update-status', (_event, data) => callback(data)),
+
+  onMainLog: (callback) =>
+    ipcRenderer.on('main-log', (_event, data) => callback(data)),
+
+  // =========================
+  // MONITOREO (INVOKES)
   // =========================
   checkSites: (sites) =>
     ipcRenderer.invoke('check-sites', sites),
@@ -18,10 +30,7 @@ contextBridge.exposeInMainWorld('api', {
   // NOTIFICACIONES
   // =========================
   showNotification: (title, body) =>
-    ipcRenderer.invoke(
-      'show-notification',
-      { title, body }
-    ),
+    ipcRenderer.invoke('show-notification', { title, body }),
 
   reportResults: (results) =>
     ipcRenderer.invoke('report-results', results),
@@ -38,26 +47,9 @@ contextBridge.exposeInMainWorld('api', {
   // =========================
   // AUTO UPDATER
   // =========================
-  onUpdateStatus: (callback) =>
-    ipcRenderer.on(
-      'update-status',
-      (_event, data) => callback(data)
-    ),
-
   installUpdate: () =>
     ipcRenderer.invoke('install-update'),
 
   removeUpdateListeners: () =>
-    ipcRenderer.removeAllListeners(
-      'update-status'
-    ),
-
-  // =========================
-  // LOGS DEL PROCESO PRINCIPAL
-  // =========================
-  onMainLog: (callback) =>
-    ipcRenderer.on(
-      'main-log',
-      (_event, data) => callback(data)
-    )
+    ipcRenderer.removeAllListeners('update-status')
 });
