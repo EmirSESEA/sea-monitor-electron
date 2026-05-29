@@ -16,7 +16,6 @@ const nodemailer = require('nodemailer');
 const axios = require('axios');
 const https = require('https');
 
-
 const log = require('electron-log');
 const { autoUpdater } = require('electron-updater');
 
@@ -42,7 +41,6 @@ const alertedSites = new Set();
 ========================= */
 const transporter = nodemailer.createTransport({
   service: 'gmail',
-
   auth: {
     user: process.env.EMAIL_USER,
     pass: process.env.EMAIL_PASS
@@ -53,31 +51,24 @@ const transporter = nodemailer.createTransport({
    ENVIAR ALERTA EMAIL
 ========================= */
 async function sendAlertEmail(downSites) {
-
   try {
-
     if (!downSites || downSites.length === 0) {
       return;
     }
 
-    console.log(
-      `📩 Enviando alerta (${downSites.length} sitios)`
-    );
+    console.log(`📩 Enviando alerta (${downSites.length} sitios)`);
 
     const html = `
       <div style="font-family: Arial, sans-serif;">
-
         <h2 style="color:#d32f2f;">
           ⚠️ Sitios caídos detectados
         </h2>
-
         <table
           border="1"
           cellpadding="8"
           cellspacing="0"
           style="border-collapse: collapse; width:100%;"
         >
-
           <thead style="background:#f5f5f5;">
             <tr>
               <th>Sitio</th>
@@ -87,45 +78,33 @@ async function sendAlertEmail(downSites) {
               <th>Tiempo</th>
             </tr>
           </thead>
-
           <tbody>
-
             ${downSites.map(site => `
               <tr>
-
                 <td>
                   ${site.name || 'Sin nombre'}
                 </td>
-
                 <td>
                   <a href="${site.url}">
                     ${site.url}
                   </a>
                 </td>
-
                 <td style="color:red;">
                   ${site.error || 'Sin detalle'}
                 </td>
-
                 <td>
                   ${site.statusCode || 0}
                 </td>
-
                 <td>
                   ${site.responseTime || 0} ms
                 </td>
-
               </tr>
             `).join('')}
-
           </tbody>
-
         </table>
-
         <p style="margin-top:20px;color:#666;font-size:12px;">
           Generado automáticamente por el monitor de URLs.
         </p>
-
       </div>
     `;
 
@@ -142,16 +121,9 @@ async function sendAlertEmail(downSites) {
     });
 
     console.log('✅ Correo enviado');
-
   } catch (error) {
-
-    console.error(
-      '❌ Error enviando correo:'
-    );
-
-    console.error(
-      error.message
-    );
+    console.error('❌ Error enviando correo:');
+    console.error(error.message);
   }
 }
 
@@ -159,125 +131,89 @@ async function sendAlertEmail(downSites) {
    VERIFICAR SITIO
 ========================= */
 async function checkStatus(url, name = '') {
-
   const startTime = Date.now();
 
   try {
-
     // ✅ Validar URL
     if (!url || typeof url !== 'string') {
-
       return {
         name: name || 'Sin nombre',
         url: '',
-
         status: 'inactive',
-
         statusCode: 0,
-
         statusText: 'URL inválida',
-
         responseTime: 0,
-
         error: 'URL inválida'
       };
     }
-
 
     // ✅ Limpiar espacios
     url = url.trim();
 
     // ✅ Agregar protocolo automáticamente
-    if (
-      !url.startsWith('http://') &&
-      !url.startsWith('https://')
-    ) {
+    if (!url.startsWith('http://') && !url.startsWith('https://')) {
       url = `https://${url}`;
     }
 
     console.log(`🔎 Revisando: ${url}`);
 
     const response = await axios({
-
       method: 'GET',
-
       url,
-
       timeout: 20000,
-
       decompress: false,
-
       timeoutErrorMessage: 'Timeout',
-
       maxRedirects: 10,
-
       httpsAgent: new https.Agent({
         rejectUnauthorized: false,
         keepAlive: false
       }),
-
-      validateStatus: () => true,
-
+      validateStatus: () => true, // Evita que Axios lance error en códigos 4xx o 5xx
       headers: {
-
-        'User-Agent':
-          'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122 Safari/537.36',
-
-        'Accept':
-          'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
-
-        'Accept-Language':
-          'es-MX,es;q=0.9',
-
-        'Cache-Control':
-          'no-cache',
-
-        'Pragma':
-          'no-cache'
+        'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
+        'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
+        'Accept-Language': 'es-MX,es;q=0.9,en;q=0.8',
+        'Connection': 'keep-alive',
+        'Upgrade-Insecure-Requests': '1',
+        'Cache-Control': 'no-cache',
+        'Pragma': 'no-cache'
       }
     });
 
-    const responseTime =
-      Date.now() - startTime;
+    const responseTime = Date.now() - startTime;
+    console.log(`✅ ${url} -> ${response.status}`);
 
-    console.log(
-      `✅ ${url} -> ${response.status}`
-    );
+    // =======================================================
+    // NUEVA LÓGICA DE DETECCIÓN DE ESTADO (Solución al 403)
+    // =======================================================
+    // Un sitio está ACTIVO si responde exitosamente (2xx/3xx) 
+    // o si el servidor deniega el acceso pero responde (401, 403, 405).
+    const allowedErrorStatuses = [401, 403, 405];
 
-    // ✅ Considerar activo casi cualquier respuesta
     const isUp =
-      response.status >= 200 &&
-      response.status < 400;
+      (response.status >= 200 && response.status < 400) ||
+      allowedErrorStatuses.includes(response.status);
+
+    // Personalizar el texto descriptivo para el Front-end si es un 403
+    let statusText = response.statusText || `HTTP ${response.status}`;
+    if (response.status === 403) {
+      statusText = 'Activo (Protegido/403)';
+    } else if (response.status === 401) {
+      statusText = 'Activo (Requiere Auth/401)';
+    }
 
     return {
-
       name,
       url,
-
-      status:
-        isUp
-          ? 'active'
-          : 'inactive',
-
-      statusCode:
-        response.status,
-
-      statusText:
-        response.statusText ||
-        `HTTP ${response.status}`,
-
+      status: isUp ? 'active' : 'inactive',
+      statusCode: response.status,
+      statusText: statusText,
       responseTime,
-
-      error:
-        isUp
-          ? null
-          : `HTTP ${response.status}`
+      error: isUp ? null : `HTTP ${response.status}`
     };
 
   } catch (error) {
-
-    const responseTime =
-      Date.now() - startTime;
+    const responseTime = Date.now() - startTime;
 
     console.log('====================');
     console.log(`❌ ${url}`);
@@ -285,47 +221,27 @@ async function checkStatus(url, name = '') {
     console.log('CODE:', error.code);
     console.log('====================');
 
-    // ✅ Algunos errores NO significan caído
+    // ✅ Algunos errores de red/SSL no significan que el servidor esté muerto
     const recoverableErrors = [
-
       'ECONNRESET',
       'ETIMEDOUT',
       'ECONNABORTED',
-
       'ERR_BAD_SSL_CLIENT_AUTH_CERT',
       'DEPTH_ZERO_SELF_SIGNED_CERT',
-
       'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
-
       'Z_DATA_ERROR'
     ];
 
-    const isProbablyUp =
-      recoverableErrors.includes(error.code);
+    const isProbablyUp = recoverableErrors.includes(error.code);
 
     return {
-
       name,
       url,
-
-      status:
-        isProbablyUp
-          ? 'active'
-          : 'inactive',
-
+      status: isProbablyUp ? 'active' : 'inactive',
       statusCode: 0,
-
-      statusText:
-        error.code ||
-        error.message ||
-        'Sin conexión',
-
+      statusText: error.code || error.message || 'Sin conexión',
       responseTime,
-
-      error:
-        error.code ||
-        error.message ||
-        'Unknown error'
+      error: error.code || error.message || 'Unknown error'
     };
   }
 }
@@ -334,69 +250,38 @@ async function checkStatus(url, name = '') {
    MONITOREAR SITIOS
 ========================= */
 async function checkSites(sites) {
-
-  console.log(
-    `🚀 Iniciando revisión de ${sites.length} sitios`
-  );
-
+  console.log(`🚀 Iniciando revisión de ${sites.length} sitios`);
   const results = [];
 
-  // ⚠️ Secuencial para evitar bloqueos
+  // ⚠️ Secuencial para evitar bloqueos por ráfagas
   for (const site of sites) {
     console.log(site);
-
-    const result = await checkStatus(
-      site.url,
-      site.name
-    );
-
+    const result = await checkStatus(site.url, site.name);
     results.push(result);
-
-    console.log(
-      `✔ ${site.name}: ${result.status}`
-    );
+    console.log(`✔ ${site.name}: ${result.status}`);
   }
 
-  const downSites = results.filter(
-    s => s.status === 'inactive'
-  );
+  const downSites = results.filter(s => s.status === 'inactive');
 
-  console.log(
-    `✅ Activos: ${results.filter(
-      s => s.status === 'active'
-    ).length
-    }`
-  );
-
-  console.log(
-    `❌ Inactivos: ${downSites.length}`
-  );
+  console.log(`✅ Activos: ${results.filter(s => s.status === 'active').length}`);
+  console.log(`❌ Inactivos: ${downSites.length}`);
 
   /* =========================
      EVITAR ALERTAS REPETIDAS
   ========================= */
-  const newDownSites =
-    downSites.filter(site => {
-
-      if (
-        alertedSites.has(site.url)
-      ) {
-        return false;
-      }
-
-      alertedSites.add(site.url);
-
-      return true;
-    });
+  const newDownSites = downSites.filter(site => {
+    if (alertedSites.has(site.url)) {
+      return false;
+    }
+    alertedSites.add(site.url);
+    return true;
+  });
 
   /* =========================
      LIMPIAR RECUPERADOS
   ========================= */
   results.forEach(site => {
-
-    if (
-      site.status === 'active'
-    ) {
+    if (site.status === 'active') {
       alertedSites.delete(site.url);
     }
   });
@@ -405,10 +290,7 @@ async function checkSites(sites) {
      ENVIAR ALERTA
   ========================= */
   if (newDownSites.length > 0) {
-
-    await sendAlertEmail(
-      newDownSites
-    );
+    await sendAlertEmail(newDownSites);
   }
 
   return results;
@@ -418,76 +300,39 @@ async function checkSites(sites) {
    WINDOW
 ========================= */
 function createWindow() {
-
   mainWindow = new BrowserWindow({
-
     width: 1200,
     height: 800,
-
     minWidth: 900,
     minHeight: 600,
-
     backgroundColor: '#0f172a',
-
-    // ✅ Mostrar inmediatamente para debug
-    show: true,
-
+    show: true, // Mostrar inmediatamente para debug
     webPreferences: {
-      preload: path.join(
-        __dirname,
-        'preload.js'
-      ),
-
+      preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
-
       nodeIntegration: false
     }
   });
 
   // ✅ Cargar HTML
-  mainWindow.loadFile(
-    path.join(
-      __dirname,
-      'index.html'
-    )
-  );
+  mainWindow.loadFile(path.join(__dirname, 'index.html'));
 
-
-  mainWindow.webContents.on(
-    'console-message',
-    (event, level, message, line, sourceId) => {
-
-      console.log('🖥️ RENDERER LOG:');
-      console.log(message);
-      console.log('LINE:', line);
-      console.log('SOURCE:', sourceId);
-    }
-  );
+  mainWindow.webContents.on('console-message', (event, level, message, line, sourceId) => {
+    console.log('🖥️ RENDERER LOG:');
+    console.log(message);
+    console.log('LINE:', line);
+    console.log('SOURCE:', sourceId);
+  });
 
   // ✅ Detectar errores de carga
-  mainWindow.webContents.on(
-    'did-fail-load',
-    (event, errorCode, errorDescription) => {
-
-      console.log(
-        '❌ Error cargando ventana:',
-        errorCode,
-        errorDescription
-      );
-    }
-  );
+  mainWindow.webContents.on('did-fail-load', (event, errorCode, errorDescription) => {
+    console.log('❌ Error cargando ventana:', errorCode, errorDescription);
+  });
 
   // ✅ Detectar crashes del renderer
-  mainWindow.webContents.on(
-    'render-process-gone',
-    (event, details) => {
-
-      console.log(
-        '❌ Renderer crashed:',
-        details
-      );
-    }
-  );
+  mainWindow.webContents.on('render-process-gone', (event, details) => {
+    console.log('❌ Renderer crashed:', details);
+  });
 
   // ✅ AutoUpdater
   if (app.isPackaged) {
@@ -496,251 +341,119 @@ function createWindow() {
 }
 
 /* =========================
-   IPC
+   IPC HANDLERS
 ========================= */
-ipcMain.handle(
-  'check-sites',
-  async (event, sites) => {
+ipcMain.handle('check-sites', async (event, sites) => {
+  console.log('====================');
+  console.log('IPC check-sites');
+  console.log('TOTAL:', sites?.length);
+  console.log(sites);
+  console.log('====================');
+  return await checkSites(sites);
+});
 
-    console.log('====================');
-    console.log('IPC check-sites');
-    console.log('TOTAL:', sites?.length);
-    console.log(sites);
-    console.log('====================');
+ipcMain.handle('check-status', async (event, site) => {
+  return await checkStatus(site.url, site.name);
+});
 
-    return await checkSites(sites);
+ipcMain.handle('show-notification', (event, { title, body }) => {
+  if (Notification.isSupported()) {
+    new Notification({ title, body }).show();
   }
-);
+});
 
-ipcMain.handle(
-  'check-status',
-  async (event, site) => {
+ipcMain.handle('report-results', async (event, results) => {
+  if (!results || !Array.isArray(results)) return;
 
-    return await checkStatus(
-      site.url,
-      site.name
-    );
-  }
-);
+  const downSites = results.filter(s => s.status === 'inactive');
 
-ipcMain.handle(
-  'show-notification',
-  (
-    event,
-    { title, body }
-  ) => {
-
-    if (
-      Notification.isSupported()
-    ) {
-
-      new Notification({
-        title,
-        body
-      }).show();
+  const newDownSites = downSites.filter(site => {
+    if (alertedSites.has(site.url)) {
+      return false;
     }
-  }
-);
+    alertedSites.add(site.url);
+    return true;
+  });
 
-ipcMain.handle(
-  'report-results',
-  async (event, results) => {
-    if (!results || !Array.isArray(results)) return;
-
-    const downSites = results.filter(
-      s => s.status === 'inactive'
-    );
-
-    // Filter out sites that are already alerted
-    const newDownSites = downSites.filter(site => {
-      if (alertedSites.has(site.url)) {
-        return false;
-      }
-      alertedSites.add(site.url);
-      return true;
-    });
-
-    // Remove from alerted list those that recovered (are active now)
-    results.forEach(site => {
-      if (site.status === 'active') {
-        alertedSites.delete(site.url);
-      }
-    });
-
-    // Send email alert if there are new down sites
-    if (newDownSites.length > 0) {
-      await sendAlertEmail(newDownSites);
+  results.forEach(site => {
+    if (site.status === 'active') {
+      alertedSites.delete(site.url);
     }
+  });
+
+  if (newDownSites.length > 0) {
+    await sendAlertEmail(newDownSites);
   }
-);
+});
 
-ipcMain.handle(
-  'get-app-version',
-  () => {
+ipcMain.handle('get-app-version', () => {
+  return app.getVersion();
+});
 
-    return app.getVersion();
-  }
-);
+ipcMain.handle('load-sites-file', async () => {
+  try {
+    const filePath = path.join(__dirname, 'sitios.json');
+    console.log('📂 Cargando sitios.json');
+    console.log(filePath);
 
-ipcMain.handle(
-  'load-sites-file',
-  async () => {
-
-    try {
-
-      const filePath = path.join(
-        __dirname,
-        'sitios.json'
-      );
-
-      console.log('📂 Cargando sitios.json');
-      console.log(filePath);
-
-      if (
-        !fs.existsSync(filePath)
-      ) {
-
-        fs.writeFileSync(
-          filePath,
-          '[]',
-          'utf8'
-        );
-      }
-
-      const data = fs.readFileSync(
-        filePath,
-        'utf8'
-      );
-
-      return JSON.parse(data);
-
-    } catch (error) {
-
-      console.error(error);
-
-      return {
-        error: error.message
-      };
+    if (!fs.existsSync(filePath)) {
+      fs.writeFileSync(filePath, '[]', 'utf8');
     }
+
+    const data = fs.readFileSync(filePath, 'utf8');
+    return JSON.parse(data);
+  } catch (error) {
+    console.error(error);
+    return { error: error.message };
   }
-);
+});
 
-ipcMain.handle(
-  'edit-sites-file',
-  async () => {
+ipcMain.handle('edit-sites-file', async () => {
+  const { shell } = require('electron');
+  const filePath = path.join(__dirname, 'sitios.json');
+  shell.openPath(filePath);
+});
 
-    const { shell } = require('electron');
-
-    const filePath = path.join(
-      __dirname,
-      'sitios.json'
-    );
-
-    shell.openPath(filePath);
-  }
-);
-
-ipcMain.handle(
-  'install-update',
-  () => {
-
-    autoUpdater.quitAndInstall();
-  }
-);
+ipcMain.handle('install-update', () => {
+  autoUpdater.quitAndInstall();
+});
 
 /* =========================
    AUTO UPDATER
 ========================= */
 function setupAutoUpdater() {
+  autoUpdater.on('checking-for-update', () => {
+    mainWindow.webContents.send('update-status', { status: 'checking' });
+  });
 
-  autoUpdater.on(
-    'checking-for-update',
-    () => {
+  autoUpdater.on('update-available', info => {
+    mainWindow.webContents.send('update-status', { status: 'available', version: info.version });
+  });
 
-      mainWindow.webContents.send(
-        'update-status',
-        {
-          status: 'checking'
-        }
-      );
-    }
-  );
+  autoUpdater.on('update-not-available', info => {
+    mainWindow.webContents.send('update-status', { status: 'not-available', version: info.version });
+  });
 
-  autoUpdater.on(
-    'update-available',
-    info => {
+  autoUpdater.on('download-progress', progress => {
+    mainWindow.webContents.send('update-status', { status: 'downloading', percent: progress.percent });
+  });
 
-      mainWindow.webContents.send(
-        'update-status',
-        {
-          status: 'available',
-          version: info.version
-        }
-      );
-    }
-  );
-
-  autoUpdater.on(
-    'update-not-available',
-    info => {
-
-      mainWindow.webContents.send(
-        'update-status',
-        {
-          status: 'not-available',
-          version: info.version
-        }
-      );
-    }
-  );
-
-  autoUpdater.on(
-    'download-progress',
-    progress => {
-
-      mainWindow.webContents.send(
-        'update-status',
-        {
-          status: 'downloading',
-          percent: progress.percent
-        }
-      );
-    }
-  );
-
-  autoUpdater.on(
-    'update-downloaded',
-    info => {
-
-      mainWindow.webContents.send(
-        'update-status',
-        {
-          status: 'downloaded',
-          version: info.version
-        }
-      );
-    }
-  );
+  autoUpdater.on('update-downloaded', info => {
+    mainWindow.webContents.send('update-status', { status: 'downloaded', version: info.version });
+  });
 
   autoUpdater.checkForUpdatesAndNotify();
 }
 
 /* =========================
-   APP
+   APP LIFE CYCLE
 ========================= */
 app.whenReady().then(() => {
-
   createWindow();
 });
 
-app.on(
-  'window-all-closed',
-  () => {
-
-    if (
-      process.platform !== 'darwin'
-    ) {
-      app.quit();
-    }
+app.on('window-all-closed', () => {
+  if (process.platform !== 'darwin') {
+    app.quit();
   }
-);
+});
