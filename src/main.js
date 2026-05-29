@@ -260,6 +260,10 @@ async function checkStatus(url, name = '') {
       statusCode:
         response.status,
 
+      statusText:
+        response.statusText ||
+        `HTTP ${response.status}`,
+
       responseTime,
 
       error:
