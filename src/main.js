@@ -157,8 +157,8 @@ async function checkStatus(url, name = '') {
 
     console.log(`🔎 Revisando: ${url}`);
 
-    const response = await axios({
-      method: 'GET',
+    // Configuración base compartida para ambas peticiones
+    const configBase = {
       url,
       timeout: 20000,
       decompress: false,
@@ -168,7 +168,7 @@ async function checkStatus(url, name = '') {
         rejectUnauthorized: false,
         keepAlive: false
       }),
-      validateStatus: () => true, // Evita que Axios lance error en códigos 4xx o 5xx
+      validateStatus: () => true,
       headers: {
         'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36',
         'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8',
@@ -178,7 +178,23 @@ async function checkStatus(url, name = '') {
         'Cache-Control': 'no-cache',
         'Pragma': 'no-cache'
       }
-    });
+    };
+
+    let response;
+    try {
+      // 🚀 PLAN A: Intentar método HEAD (Súper rápido y sin descargar basura)
+      response = await axios({ method: 'HEAD', ...configBase });
+
+      // Si el servidor responde que no soporta HEAD (405) o no está implementado (501)
+      if (response.status === 405 || response.status === 501) {
+        console.log(`⚠️ Método HEAD no permitido por el servidor en ${url}. Aplicando Plan B (GET)...`);
+        response = await axios({ method: 'GET', ...configBase });
+      }
+    } catch (error) {
+      // Si falla por completo el HEAD por alguna configuración rara de red, intentamos GET antes de darlo por muerto
+      console.log(`🔄 Error en HEAD para ${url}, reintentando con GET...`);
+      response = await axios({ method: 'GET', ...configBase });
+    }
 
     const responseTime = Date.now() - startTime;
     console.log(`✅ ${url} -> ${response.status}`);
