@@ -205,6 +205,8 @@ async function checkStatus(url, name = '') {
 
       timeout: 20000,
 
+      decompress: false,
+
       timeoutErrorMessage: 'Timeout',
 
       maxRedirects: 10,
@@ -293,7 +295,9 @@ async function checkStatus(url, name = '') {
       'ERR_BAD_SSL_CLIENT_AUTH_CERT',
       'DEPTH_ZERO_SELF_SIGNED_CERT',
 
-      'UNABLE_TO_VERIFY_LEAF_SIGNATURE'
+      'UNABLE_TO_VERIFY_LEAF_SIGNATURE',
+
+      'Z_DATA_ERROR'
     ];
 
     const isProbablyUp =
@@ -310,6 +314,11 @@ async function checkStatus(url, name = '') {
           : 'inactive',
 
       statusCode: 0,
+
+      statusText:
+        error.code ||
+        error.message ||
+        'Sin conexión',
 
       responseTime,
 
