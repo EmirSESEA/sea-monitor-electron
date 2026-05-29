@@ -175,11 +175,14 @@ async function checkStatus(url, name = '') {
 
         statusCode: 0,
 
+        statusText: 'URL inválida',
+
         responseTime: 0,
 
         error: 'URL inválida'
       };
     }
+
 
     // ✅ Limpiar espacios
     url = url.trim();
