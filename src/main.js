@@ -247,7 +247,7 @@ async function checkStatus(url, name = '') {
     // ✅ Considerar activo casi cualquier respuesta
     const isUp =
       response.status >= 200 &&
-      response.status < 600;
+      response.status < 400;
 
     return {
 
